@@ -78,3 +78,11 @@ func (f *Form) MatchesPattern(field string, pattern *regexp.Regexp) {
 		f.Errors.Add(field, "This field is invalid")
 	}
 }
+
+func (f *Form) Matches(field, other string) {
+	first := f.Get(field)
+	second := f.Get(other)
+	if first != second {
+		f.Errors.Add(other, "Passwords do not match")
+	}
+}

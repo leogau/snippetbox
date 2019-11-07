@@ -20,6 +20,10 @@ func (app *application) home(w http.ResponseWriter, r *http.Request) {
 	app.render(w, r, "home.page.tmpl", &TemplateData{Snippets: s})
 }
 
+func (app *application) about(w http.ResponseWriter, r *http.Request) {
+	app.render(w, r, "about.page.tmpl", nil)
+}
+
 func (app *application) showSnippet(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.URL.Query().Get(":id"))
 	if err != nil || id < 1 {
@@ -39,6 +43,18 @@ func (app *application) showSnippet(w http.ResponseWriter, r *http.Request) {
 
 	app.render(w, r, "show.page.tmpl", &TemplateData{
 		Snippet: s,
+	})
+}
+
+func (app *application) showUserProfile(w http.ResponseWriter, r *http.Request) {
+	user, err := app.users.Get(app.session.GetInt(r, "authenticatedUserID"))
+	if err != nil {
+		app.serverError(w, err)
+		return
+	}
+
+	app.render(w, r, "profile.page.tmpl", &TemplateData{
+		User: user,
 	})
 }
 
@@ -119,7 +135,7 @@ func (app *application) signupUser(w http.ResponseWriter, r *http.Request) {
 	err = app.users.Insert(form.Get("name"), form.Get("email"), form.Get("password"))
 	if err != nil {
 		if errors.Is(err, models.ErrDuplicateEmail) {
-			form.Errors.Add("email", "Address is alread in use")
+			form.Errors.Add("email", "Address is already in use")
 			app.render(w, r, "signup.page.tmpl", &TemplateData{Form: form})
 		} else {
 			app.serverError(w, err)
@@ -159,6 +175,11 @@ func (app *application) loginUser(w http.ResponseWriter, r *http.Request) {
 
 	app.session.Put(r, "authenticatedUserID", id)
 
+	path := app.session.PopString(r, "redirectPathAfterLogin")
+	if path != "" {
+		http.Redirect(w, r, path, http.StatusSeeOther)
+		return
+	}
 	http.Redirect(w, r, "/snippet/create", http.StatusSeeOther)
 }
 
@@ -166,4 +187,47 @@ func (app *application) logoutUser(w http.ResponseWriter, r *http.Request) {
 	app.session.Remove(r, "authenticatedUserID")
 	app.session.Put(r, "flash", "You've been logged out successfully!")
 	http.Redirect(w, r, "/", 303)
+}
+
+func (app *application) changePassword(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		app.clientError(w, http.StatusBadRequest)
+		return
+	}
+
+	form := forms.New(r.PostForm)
+	form.Required("currentPassword", "newPassword", "newPasswordConfirmation")
+	form.MinLength("newPassword", 10)
+	form.Matches("newPassword", "newPasswordConfirmation")
+
+	if !form.Valid() {
+		app.render(w, r, "password.page.tmpl", &TemplateData{Form: form})
+		return
+	}
+
+	// err = app.users.Insert(form.Get("name"), form.Get("email"), form.Get("password"))
+	// if err != nil {
+	// 	if errors.Is(err, models.ErrDuplicateEmail) {
+	// 		form.Errors.Add("email", "Address is alread in use")
+	// 		app.render(w, r, "signup.page.tmpl", &TemplateData{Form: form})
+	// 	} else {
+	// 		app.serverError(w, err)
+	// 	}
+	// 	return
+	// }
+
+	// app.session.Put(r, "flash", "Your signup was successful. Please log in.")
+
+	// http.Redirect(w, r, "/user/login", http.StatusSeeOther)
+}
+
+func (app *application) changePasswordForm(w http.ResponseWriter, r *http.Request) {
+	app.render(w, r, "password.page.tmpl", &TemplateData{
+		Form: forms.New(nil),
+	})
+}
+
+func ping(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("OK"))
 }
